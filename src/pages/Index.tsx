@@ -21,10 +21,7 @@ const Index = () => {
     );
   }
 
-  if (!user) {
-    navigate("/auth");
-    return null;
-  }
+  // Protected by ClerkProvider, user is always available here
 
   const features = [
     {
@@ -55,7 +52,7 @@ const Index = () => {
           <span className="text-lg font-bold text-foreground">CodeSphere</span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-sm text-muted-foreground">{user.email}</span>
+          <span className="text-sm text-muted-foreground">{user?.email}</span>
           <Button variant="ghost" size="sm" onClick={signOut}>
             <LogOut className="h-4 w-4" />
           </Button>

@@ -62,9 +62,9 @@ const Room = () => {
       setRoom(data);
       setEditorCode(data.current_code);
 
-      // Ensure user is a member
+      // Ensure user is a member — use Clerk user ID
       await supabase.from("room_members").upsert(
-        { room_id: data.id, user_id: user.id, is_online: true },
+        { room_id: data.id, user_id: user!.id, is_online: true },
         { onConflict: "room_id,user_id" }
       );
     };
