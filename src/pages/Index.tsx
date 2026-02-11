@@ -21,7 +21,10 @@ const Index = () => {
     );
   }
 
-  // Protected by ClerkProvider, user is always available here
+  if (!user) {
+    navigate("/auth");
+    return null;
+  }
 
   const features = [
     {
@@ -43,7 +46,6 @@ const Index = () => {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      {/* Navbar */}
       <header className="flex items-center justify-between border-b border-border/50 px-6 py-4">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
@@ -52,14 +54,13 @@ const Index = () => {
           <span className="text-lg font-bold text-foreground">CodeSphere</span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-sm text-muted-foreground">{user?.email}</span>
+          <span className="text-sm text-muted-foreground">{user.email}</span>
           <Button variant="ghost" size="sm" onClick={signOut}>
             <LogOut className="h-4 w-4" />
           </Button>
         </div>
       </header>
 
-      {/* Hero */}
       <main className="flex flex-1 flex-col items-center justify-center gap-12 px-6 py-12">
         <div className="text-center space-y-4 max-w-2xl">
           <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
@@ -70,7 +71,6 @@ const Index = () => {
           </p>
         </div>
 
-        {/* Room Actions */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-6">
           <Button
             onClick={() => createRoom()}
@@ -103,7 +103,6 @@ const Index = () => {
           </div>
         </div>
 
-        {/* Features */}
         <div className="grid gap-6 sm:grid-cols-3 max-w-4xl w-full">
           {features.map((f) => (
             <Card key={f.title} className="border-border/40 bg-card/60 backdrop-blur hover:border-primary/30 transition-colors">
