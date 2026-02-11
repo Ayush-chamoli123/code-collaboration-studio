@@ -25,7 +25,7 @@ export function useRoom() {
 
     const { data: room, error } = await supabase
       .from("rooms")
-      .insert({ code, name: name || "Untitled Room", host_id: user!.id })
+      .insert({ code, name: name || "Untitled Room", host_id: user.id })
       .select()
       .single();
 
@@ -35,8 +35,7 @@ export function useRoom() {
       return;
     }
 
-    // Add host as member
-    await supabase.from("room_members").insert({ room_id: room.id, user_id: user!.id });
+    await supabase.from("room_members").insert({ room_id: room.id, user_id: user.id });
 
     setLoading(false);
     navigate(`/room/${room.code}`);
@@ -46,7 +45,6 @@ export function useRoom() {
     if (!user) return;
     setLoading(true);
 
-    // Look up room by code - use maybeSingle since room might not exist
     const { data: room, error } = await supabase
       .from("rooms")
       .select("id, code")
@@ -59,9 +57,8 @@ export function useRoom() {
       return;
     }
 
-    // Join as member (upsert to avoid duplicate errors)
     await supabase.from("room_members").upsert(
-      { room_id: room.id, user_id: user!.id, is_online: true },
+      { room_id: room.id, user_id: user.id, is_online: true },
       { onConflict: "room_id,user_id" }
     );
 
