@@ -1,6 +1,8 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { MousePointer2, Pen, Square, Type, Undo2, Eraser, ArrowUpRight } from "lucide-react";
+import { MousePointer2, Pen, Square, Type, Undo2, Eraser, ArrowUpRight, Trash2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 type Tool = "pointer" | "pen" | "rectangle" | "arrow" | "text" | "eraser";
 
@@ -18,6 +20,7 @@ interface DrawAction {
 
 const Whiteboard = ({ roomId }: WhiteboardProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const { user } = useAuth();
   const [tool, setTool] = useState<Tool>("pen");
   const [drawing, setDrawing] = useState(false);
   const [actions, setActions] = useState<DrawAction[]>([]);
@@ -54,7 +57,6 @@ const Whiteboard = ({ roomId }: WhiteboardProps) => {
         ctx.moveTo(s.x, s.y);
         ctx.lineTo(e.x, e.y);
         ctx.stroke();
-        // Arrowhead
         const angle = Math.atan2(e.y - s.y, e.x - s.x);
         const headLen = 15;
         ctx.beginPath();
@@ -70,6 +72,63 @@ const Whiteboard = ({ roomId }: WhiteboardProps) => {
       }
     });
   }, [actions, currentAction]);
+
+  // Load existing whiteboard actions from DB
+  useEffect(() => {
+    const loadActions = async () => {
+      const { data } = await supabase
+        .from("whiteboard_actions")
+        .select("*")
+        .eq("room_id", roomId)
+        .order("created_at", { ascending: true });
+
+      if (data) {
+        const loaded: DrawAction[] = data.map((row: any) => row.action_data as DrawAction);
+        setActions(loaded);
+      }
+    };
+    loadActions();
+
+    // Subscribe to realtime whiteboard changes
+    const channel = supabase
+      .channel(`whiteboard-${roomId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "whiteboard_actions", filter: `room_id=eq.${roomId}` },
+        (payload) => {
+          const newAction = (payload.new as any).action_data as DrawAction;
+          const senderId = (payload.new as any).user_id;
+          // Only add if from another user (we already added our own)
+          if (senderId !== user?.id) {
+            setActions((prev) => [...prev, newAction]);
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "whiteboard_actions", filter: `room_id=eq.${roomId}` },
+        () => {
+          // On clear, reload all
+          supabase
+            .from("whiteboard_actions")
+            .select("*")
+            .eq("room_id", roomId)
+            .order("created_at", { ascending: true })
+            .then(({ data }) => {
+              if (data) {
+                setActions(data.map((row: any) => row.action_data as DrawAction));
+              } else {
+                setActions([]);
+              }
+            });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [roomId, user?.id]);
 
   useEffect(() => { redraw(); }, [redraw]);
 
@@ -92,13 +151,25 @@ const Whiteboard = ({ roomId }: WhiteboardProps) => {
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   };
 
+  const saveAction = async (action: DrawAction) => {
+    if (!user) return;
+    await supabase.from("whiteboard_actions").insert({
+      room_id: roomId,
+      user_id: user.id,
+      action_type: action.type,
+      action_data: action as any,
+    });
+  };
+
   const onMouseDown = (e: React.MouseEvent) => {
     if (tool === "pointer") return;
     if (tool === "text") {
       const pos = getPos(e);
       const text = prompt("Enter text:");
       if (text) {
-        setActions((prev) => [...prev, { type: "text", points: [pos], color, width: 2, text }]);
+        const action: DrawAction = { type: "text", points: [pos], color, width: 2, text };
+        setActions((prev) => [...prev, action]);
+        saveAction(action);
       }
       return;
     }
@@ -114,12 +185,18 @@ const Whiteboard = ({ roomId }: WhiteboardProps) => {
   const onMouseUp = () => {
     if (currentAction) {
       setActions((prev) => [...prev, currentAction]);
+      saveAction(currentAction);
       setCurrentAction(null);
     }
     setDrawing(false);
   };
 
   const undo = () => setActions((prev) => prev.slice(0, -1));
+
+  const clearBoard = async () => {
+    await supabase.from("whiteboard_actions").delete().eq("room_id", roomId);
+    setActions([]);
+  };
 
   const tools: { id: Tool; icon: typeof Pen; label: string }[] = [
     { id: "pointer", icon: MousePointer2, label: "Pointer" },
@@ -148,6 +225,9 @@ const Whiteboard = ({ roomId }: WhiteboardProps) => {
         <div className="mx-2 h-4 w-px bg-border" />
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={undo} title="Undo">
           <Undo2 className="h-4 w-4" />
+        </Button>
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={clearBoard} title="Clear">
+          <Trash2 className="h-4 w-4" />
         </Button>
       </div>
       <div className="flex-1 relative bg-background">
