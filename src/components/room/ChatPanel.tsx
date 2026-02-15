@@ -2,14 +2,13 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Send } from "lucide-react";
+import { Send, Pencil, Trash2, X, Check } from "lucide-react";
 
 interface ChatMessage {
   id: string;
   content: string;
   created_at: string;
   user_id: string;
-  display_name?: string;
 }
 
 interface ChatPanelProps {
@@ -21,6 +20,8 @@ const ChatPanel = ({ roomId, members }: ChatPanelProps) => {
   const { user } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const getName = (userId: string) =>
@@ -45,6 +46,18 @@ const ChatPanel = ({ roomId, members }: ChatPanelProps) => {
           setMessages((prev) => [...prev, payload.new as ChatMessage]);
         }
       )
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_messages", filter: `room_id=eq.${roomId}` },
+        (payload) => {
+          const updated = payload.new as ChatMessage;
+          setMessages((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+        }
+      )
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "chat_messages", filter: `room_id=eq.${roomId}` },
+        (payload) => {
+          const deletedId = (payload.old as { id: string }).id;
+          setMessages((prev) => prev.filter((m) => m.id !== deletedId));
+        }
+      )
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
@@ -60,6 +73,22 @@ const ChatPanel = ({ roomId, members }: ChatPanelProps) => {
     setInput("");
   };
 
+  const startEdit = (msg: ChatMessage) => {
+    setEditingId(msg.id);
+    setEditText(msg.content);
+  };
+
+  const saveEdit = async () => {
+    if (!editingId || !editText.trim()) return;
+    await supabase.from("chat_messages").update({ content: editText.trim() }).eq("id", editingId);
+    setEditingId(null);
+    setEditText("");
+  };
+
+  const deleteMessage = async (id: string) => {
+    await supabase.from("chat_messages").delete().eq("id", id);
+  };
+
   return (
     <div className="flex flex-col h-full">
       <div className="px-4 py-3 border-b border-border">
@@ -68,12 +97,35 @@ const ChatPanel = ({ roomId, members }: ChatPanelProps) => {
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-3">
         {messages.map((msg) => {
           const isOwn = msg.user_id === user?.id;
+          const isEditing = editingId === msg.id;
           return (
-            <div key={msg.id} className={`flex flex-col ${isOwn ? "items-end" : "items-start"}`}>
+            <div key={msg.id} className={`group flex flex-col ${isOwn ? "items-end" : "items-start"}`}>
               <span className="text-[10px] text-muted-foreground mb-0.5">{getName(msg.user_id)}</span>
-              <div className={`max-w-[85%] rounded-lg px-3 py-1.5 text-sm ${isOwn ? "bg-primary/20 text-foreground" : "bg-muted text-foreground"}`}>
-                {msg.content}
-              </div>
+              {isEditing ? (
+                <div className="flex items-center gap-1 max-w-[85%]">
+                  <input
+                    value={editText}
+                    onChange={(e) => setEditText(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && saveEdit()}
+                    className="flex-1 rounded-md bg-muted px-2 py-1 text-sm text-foreground outline-none"
+                    autoFocus
+                  />
+                  <Button size="icon" variant="ghost" className="h-6 w-6" onClick={saveEdit}><Check className="h-3 w-3" /></Button>
+                  <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setEditingId(null)}><X className="h-3 w-3" /></Button>
+                </div>
+              ) : (
+                <div className="relative max-w-[85%]">
+                  <div className={`rounded-lg px-3 py-1.5 text-sm ${isOwn ? "bg-primary/20 text-foreground" : "bg-muted text-foreground"}`}>
+                    {msg.content}
+                  </div>
+                  {isOwn && (
+                    <div className="hidden group-hover:flex absolute -top-5 right-0 gap-0.5">
+                      <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => startEdit(msg)}><Pencil className="h-3 w-3" /></Button>
+                      <Button size="icon" variant="ghost" className="h-5 w-5 text-destructive" onClick={() => deleteMessage(msg.id)}><Trash2 className="h-3 w-3" /></Button>
+                    </div>
+                  )}
+                </div>
+              )}
               <span className="text-[9px] text-muted-foreground/60 mt-0.5">
                 {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
               </span>
