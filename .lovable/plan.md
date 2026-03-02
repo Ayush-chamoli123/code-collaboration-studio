@@ -1,66 +1,32 @@
 
+# Fix: Login Button Stuck on "Loading..."
 
-# CodeSphere — Collaborative C++ Code Editor
+## Problem
+The login form gets stuck on "Loading..." because the `handleSubmit` function lacks error handling for unexpected exceptions. If the authentication call throws (e.g., network error), `setLoading(false)` never runs, leaving the button permanently disabled.
 
-## Overview
-A real-time collaborative code editor focused on C++ with room-based collaboration (like Google Meet), a working C++ compiler, real-time chat, whiteboard, and contributor tracking.
+Additionally, calling `navigate()` directly during render (lines 21-24 in Auth.tsx, lines 24-27 in Index.tsx) is a React anti-pattern that can cause warnings and unpredictable behavior.
 
----
+## Fix (2 files)
 
-## 1. Authentication & User Accounts
-- Full email/password sign up and login using Supabase Auth
-- User profile with display name and avatar
-- Redirect unauthenticated users to the auth page
+### 1. `src/pages/Auth.tsx`
+- Wrap `handleSubmit` body in a `try/catch/finally` block so `setLoading(false)` always runs
+- Replace the render-time `navigate()` call with a `<Navigate>` component from react-router-dom (proper declarative redirect)
+- Add `console.log` for the sign-in response to help debug if the issue persists
 
-## 2. Landing / Home Page
-- Dark-themed landing page (matching the screenshots)
-- Feature cards: Code Editor, Whiteboard, Real-Time Collaboration
-- **Create New Room** button — generates a unique room code
-- **Join Room** — enter a room code and optional password
-- Show logged-in user's name
+### 2. `src/pages/Index.tsx`
+- Replace the render-time `navigate("/auth")` call with a `<Navigate to="/auth" replace />` component
 
-## 3. Room System (Google Meet–style)
-- Each room gets a unique shareable code (e.g., "ABC-123")
-- Optional room password protection
-- Room creator is the "host"
-- Anyone with the code can join and is automatically added to the **Contributors** list
-- Contributor sidebar shows all users in the room with join time and online status (green dot)
-- Supabase Realtime Presence to track who's online
+## Technical Details
 
-## 4. Code Editor with C++ Compilation
-- Monaco Editor (VS Code's editor) with C++ syntax highlighting
-- **Run** button that compiles and executes C++ code via Judge0 API (edge function)
-- Input field for stdin (optional program input)
-- Output panel showing compilation results, errors, and program output
-- Real-time code syncing across all room members via Supabase Realtime
+```text
+Auth.tsx changes:
+- Import Navigate from react-router-dom
+- if (user) return <Navigate to="/" replace />
+- Wrap handleSubmit in try/catch/finally
 
-## 5. Real-Time Chat Panel
-- Collapsible chat sidebar on the right
-- Messages show username, timestamp, and online indicator
-- Support for @mentions of other collaborators
-- Messages stored per room in Supabase
+Index.tsx changes:
+- Import Navigate from react-router-dom
+- if (!user) return <Navigate to="/auth" replace />
+```
 
-## 6. Whiteboard
-- Toggle between Code and Whiteboard views
-- Drawing canvas with tools: pointer, pen, rectangle, arrow, text, undo, eraser
-- Real-time syncing of drawings across all room members
-- Built using HTML Canvas
-
-## 7. Room Controls (Top Bar)
-- Toggle between Code / Whiteboard views
-- Language selector (showing C++ as the option)
-- Collaborators, Chat, Share, and Copy Room Code buttons
-- Cursor position indicator (Line, Column)
-
-## 8. Backend (Supabase + Edge Functions)
-- **Database tables**: profiles, rooms, room_members, chat_messages
-- **Edge function**: `compile-cpp` — proxies code to Judge0 API for compilation
-- **Realtime channels**: code sync, chat messages, presence/contributors
-- RLS policies to secure room data
-
-## 9. Design & Theme
-- Dark theme matching the screenshots (dark navy/charcoal background)
-- Cyan/blue accent colors for active states
-- Purple accent for create buttons
-- Clean, minimal UI with collapsible sidebars
-
+These are small, targeted fixes that should resolve the stuck loading state and make redirects work reliably.
