@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useRoom } from "@/hooks/useRoom";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,6 @@ const Index = () => {
   const { user, signOut, loading: authLoading } = useAuth();
   const { createRoom, joinRoom, loading } = useRoom();
   const [joinCode, setJoinCode] = useState("");
-  const navigate = useNavigate();
 
   if (authLoading) {
     return (
@@ -22,8 +21,7 @@ const Index = () => {
   }
 
   if (!user) {
-    navigate("/auth");
-    return null;
+    return <Navigate to="/auth" replace />;
   }
 
   const features = [
