@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,42 +15,43 @@ const Auth = () => {
   const [displayName, setDisplayName] = useState("");
   const [loading, setLoading] = useState(false);
   const { signIn, signUp, user } = useAuth();
-  const navigate = useNavigate();
   const { toast } = useToast();
 
   if (user) {
-    navigate("/", { replace: true });
-    return null;
+    return <Navigate to="/" replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
-    if (isLogin) {
-      const { error } = await signIn(email, password);
-      if (error) {
-        toast({ title: "Login failed", description: error.message, variant: "destructive" });
+    try {
+      if (isLogin) {
+        const { error } = await signIn(email, password);
+        if (error) {
+          toast({ title: "Login failed", description: error.message, variant: "destructive" });
+        }
       } else {
-        navigate("/");
+        if (!displayName.trim()) {
+          toast({ title: "Name required", description: "Please enter a display name.", variant: "destructive" });
+          return;
+        }
+        const { error } = await signUp(email, password, displayName);
+        if (error) {
+          const msg = error.message.includes("already registered")
+            ? "This email is already registered. Try logging in."
+            : error.message;
+          toast({ title: "Sign up failed", description: msg, variant: "destructive" });
+        } else {
+          toast({ title: "Check your email", description: "We sent you a confirmation link." });
+        }
       }
-    } else {
-      if (!displayName.trim()) {
-        toast({ title: "Name required", description: "Please enter a display name.", variant: "destructive" });
-        setLoading(false);
-        return;
-      }
-      const { error } = await signUp(email, password, displayName);
-      if (error) {
-        const msg = error.message.includes("already registered")
-          ? "This email is already registered. Try logging in."
-          : error.message;
-        toast({ title: "Sign up failed", description: msg, variant: "destructive" });
-      } else {
-        toast({ title: "Check your email", description: "We sent you a confirmation link." });
-      }
+    } catch (err: any) {
+      console.error("Auth error:", err);
+      toast({ title: "Error", description: err?.message || "Something went wrong. Please try again.", variant: "destructive" });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
