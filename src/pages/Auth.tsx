@@ -21,6 +21,24 @@ const Auth = () => {
     return <Navigate to="/" replace />;
   }
 
+  const getAuthErrorMessage = (message?: string) => {
+    const normalized = (message || "").toLowerCase();
+
+    if (normalized.includes("failed to fetch")) {
+      return "Cannot reach the authentication server. Please disable VPN/ad-blocker, check internet, and try again.";
+    }
+
+    if (normalized.includes("invalid login credentials")) {
+      return "Email or password is incorrect.";
+    }
+
+    if (normalized.includes("email not confirmed")) {
+      return "Please confirm your email before signing in.";
+    }
+
+    return message || "Something went wrong. Please try again.";
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -29,7 +47,11 @@ const Auth = () => {
       if (isLogin) {
         const { error } = await signIn(email, password);
         if (error) {
-          toast({ title: "Login failed", description: error.message, variant: "destructive" });
+          toast({
+            title: "Login failed",
+            description: getAuthErrorMessage(error.message),
+            variant: "destructive",
+          });
         }
       } else {
         if (!displayName.trim()) {
@@ -48,7 +70,11 @@ const Auth = () => {
       }
     } catch (err: any) {
       console.error("Auth error:", err);
-      toast({ title: "Error", description: err?.message || "Something went wrong. Please try again.", variant: "destructive" });
+      toast({
+        title: "Login failed",
+        description: getAuthErrorMessage(err?.message),
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
